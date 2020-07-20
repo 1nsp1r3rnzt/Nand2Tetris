@@ -10,9 +10,9 @@
   - [x] 3: Sequential Logic
   - [x] 4: Machine Language
   - [x] 5: Computer Architecture
+  - [x] 6: Assembler
 
 ## Part 2 (PENDING)
-  - [ ] 6: Assembler
   - [ ] 7: VM I: Stack Arithmetic
   - [ ] 8: VM II: Program Control
   - [ ] 9: High-Level Language

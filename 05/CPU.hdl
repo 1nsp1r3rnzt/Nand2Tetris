@@ -1,0 +1,93 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+
+    //is A command
+    Not(in=instruction[15],out=isAcmd);
+
+    //is C cmd
+    Not(in=isAcmd,out=isCcmd);
+    Mux16(a=outM2,b[0..14]=instruction[0..14],b[15]=false,sel=isAcmd,out=out,out=outmMuxInstruction);   //mistake forgot b[15]=false
+    
+    Or(a=instruction[5],b=isAcmd,out=isAcmdOrwriteA);
+    ARegister(in=outmMuxInstruction,load=isAcmdOrwriteA,out=aRegisterout,out[0..14]=addressM); //A  //mistake its 0..14 not 0..15
+    
+    // write data register when its A command.
+    And(a=instruction[4],b=isCcmd,out=isCcmdandWriteData);
+    DRegister(in=outM2, load=isCcmdandWriteData,out=dRegisterout ); //D
+    Mux16(a=aRegisterout,b=inM,sel=instruction[12],out=aregisterMuxmemory); //A or M , sel= `a` bit
+    
+    //ALU
+    ALU(x=dRegisterout,y=aregisterMuxmemory,zx=instruction[11],nx=instruction[10],zy=instruction[9],ny=instruction[8],f=instruction[7],no=instruction[6],out=outM,out=outM2,zr=zr,ng=ng);
+    
+
+    // JUMP Logic Truth Table
+    // |i2|i1|i0|                    |||
+    // |j1|j2|j3|effect              |||
+    // |0 |0 |0 |no jump             |0||
+    // |0 |0 |1 |out>0               |means out!=0 and out!=<0 so ng=0 and zr=0||
+    // |0 |1 |0 |out=0               |zr=1,||
+    // |0 |1 |1 |out>0 Or out=0      |ng=0,zr=1||
+    // |1 |0 |0 |out<0               |ng=1||
+    // |1 |0 |1 |out!=0              |zr=0||
+    // |1 |1 |0 |out<=0              |ng=1,zr=1||
+    // |1 |1 |1 |unconditional jump  |1||
+ 
+    // JUMP Logic 
+      Not(in=ng,out=notng);
+    Not(in=zr,out=notzr);
+
+    Or(a=notng,b=zr,out=notngOrzr); // Case2: out>0 Or out=0  -> ng=0 or zr=1
+    And(a=notng,b=notzr,out=notngAndnotzr); // Case4: out>0 -> ng=0 and zr=0 
+    Or(a=ng,b=zr,out=ngOrzr);     //Case 7: out<=0    -> ng=1 OR zr=1
+
+
+// Jump Bit
+Mux8Way16(a=false,b[15]=notngAndnotzr,b[0..14]=false,c[15]=zr,c[0..14]=false,d[15]=notngOrzr,d[0..14]=false,e[15]=ng,e[0..14]=false,f[15]=notzr,f[0..14]=false,g[15]=ngOrzr,g[0..14]=false,h=true,sel[2]=instruction[2],sel[1]= instruction[1],sel[0]=instruction[0],out[15]=jumpout);
+
+//jump when its c command and jump bit is available
+And(a=jumpout,b=isCcmd,out=jumpwhencomputecmd);
+//PROGRAM COUNTER
+PC(in=aRegisterout,inc=true,reset=reset,load=jumpwhencomputecmd,out[0..14]=pc);//PC
+
+//Adress to write
+And(a=instruction[3],b=isCcmd,out=writeM);
+}
